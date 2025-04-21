@@ -21,7 +21,7 @@ jobs:
         - name: Retrive Public EC2 machines
           run: |
            IP_LIST=$(aws ec2 describe-instances \
-              --filters 'Name=instance-state-name', Values=running \
+              --filters "Name=instance-state-name, Values=running" \
               --query "Reservations[].Instances[].PublicIpAddress" \
               --output text)
 
