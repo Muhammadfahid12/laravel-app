@@ -40,7 +40,7 @@ jobs:
    # 1️⃣  after Checkout, pack the source
     - name: Create source archive on runner
       run: |
-        tar --exclude='.git' -czf source.tar.gz .
+         git ls-files -z | tar --null -T - -czf source.tar.gz
 
 # 2️⃣  copy that archive to the build server
     - name: Push source to build server
