@@ -4,6 +4,6 @@ down
 events.scanned.php
 maintenance.php
 routes.php
-routes.scanned.php
+routes.scann.php
 schedule-*
 services.json

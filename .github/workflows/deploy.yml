@@ -49,7 +49,8 @@ jobs:
         echo "${{secrets.SSH_PRIVATE_KEY}}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
         scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
-            source.tar.gz ubuntu@${{ secrets.BUILD_SERVER_IP }}:/tmp/
+           ./composer.json ./src/*  source.tar.gz ubuntu@${{ secrets.BUILD_SERVER_IP }}:/tmp/
+            
 
 # 3️⃣  SSH and build (replace old block)
     - name: Run composer and build on build server
@@ -80,7 +81,7 @@ jobs:
         php artisan config:cache route:cache view:cache
 
         mkdir -p ~/builds
-        tar --exclude='.git' -czf ~/builds/localpay-api.tar.gz .
+        tar  -czf ~/builds/localpay-api.tar.gz .
         SSH
 
     - name: Download artifact from build server
