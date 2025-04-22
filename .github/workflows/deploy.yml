@@ -105,42 +105,40 @@ jobs:
               localpay-api.tar.gz ubuntu@$ip:/tmp/
 
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@$ip <<'SSH'
-        set -e  # 🔥 Remove indentation in heredoc content
-        if ! command -v nginx >/dev/null 2>&1; then
-            sudo apt-get update
-              sudo apt-get install -y software-properties-common
-              sudo add-apt-repository -y ppa:ondrej/php
-              sudo apt-get update
-              sudo apt-get install -y nginx \
-                  php8.2 php8.2-fpm php8.2-cli \
-                  php8.2-{mbstring,curl,pgsql,xml,zip,bcmath,intl} \
-                  unzip curl
-              sudo systemctl enable nginx php8.2-fpm
-        fi
+set -e  # 🔥 Remove indentation in heredoc content
+if ! command -v nginx >/dev/null 2>&1; then
+sudo apt-get update
+sudo apt-get install -y software-properties-common
+sudo add-apt-repository -y ppa:ondrej/php
+sudo apt-get update
+sudo apt-get install -y nginx \
+php8.2 php8.2-fpm php8.2-cli \
+php8.2-{mbstring,curl,pgsql,xml,zip,bcmath,intl} \
+unzip curl
+sudo systemctl enable nginx php8.2-fpm
+fi
 
-        sudo mkdir -p /var/www/html/localpay-api
-        sudo tar -xzf /tmp/localpay-api.tar.gz \
-              -C /var/www/html/localpay-api --strip-components=1
-        sudo chown -R www-data:www-data /var/www/html/localpay-api
-        sudo chmod -R 755 /var/www/html/localpay-api
+sudo mkdir -p /var/www/html/localpay-api
+sudo tar -xzf /tmp/localpay-api.tar.gz \
+      -C /var/www/html/localpay-api --strip-components=1
+sudo chown -R www-data:www-data /var/www/html/localpay-api
+sudo chmod -R 755 /var/www/html/localpay-api
 
-        sudo cp /var/www/html/localpay-api/deploy/nginx.conf \
-                  /etc/nginx/sites-available/localpay-api
-        sudo sed -i 's#fastcgi_pass .*;#fastcgi_pass unix:/run/php/php8.2-fpm.sock;#' \
-                  /etc/nginx/sites-available/localpay-api
-        sudo ln -sf /etc/nginx/sites-available/localpay-api \
-                      /etc/nginx/sites-enabled/localpay-api
-        sudo rm -f /etc/nginx/sites-enabled/default || true
-
-        cd /var/www/html/localpay-api
-        php artisan migrate --force --no-interaction
-        php artisan config:cache
-        php artisan route:cache
-        php artisan view:cache
-
-        sudo systemctl reload php8.2-fpm
-        sudo systemctl restart nginx
-        <<SSH 
+sudo cp /var/www/html/localpay-api/deploy/nginx.conf \
+          /etc/nginx/sites-available/localpay-api
+sudo sed -i 's#fastcgi_pass .*;#fastcgi_pass unix:/run/php/php8.2-fpm.sock;#' \
+          /etc/nginx/sites-available/localpay-api
+sudo ln -sf /etc/nginx/sites-available/localpay-api \
+              /etc/nginx/sites-enabled/localpay-api
+sudo rm -f /etc/nginx/sites-enabled/default || t
+cd /var/www/html/localpay-api
+php artisan migrate --force --no-interaction
+php artisan config:cache
+php artisan route:cache
+php artisan view:ca
+sudo systemctl reload php8.2-fpm
+sudo systemctl restart nginx
+SSH
         done
         
 
