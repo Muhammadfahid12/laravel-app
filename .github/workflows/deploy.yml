@@ -94,6 +94,27 @@ jobs:
 
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@$ip <<'SSH'
         set -e
+        sudo mkdir -p /var/www/html/localpay-api/deploy
+        if [ ! -f /var/www/html/localpay-api/deploy/nginx.conf ]; then
+          cat <<EOF | sudo tee /var/www/html/localpay-api/deploy/nginx.conf
+        server {
+            listen 80;
+            server_name _;
+            root /var/www/html/localpay-api/public;
+            index index.php;
+            
+            location / {
+                try_files \$uri \$uri/ /index.php?\$query_string;
+            }
+            
+            location ~ \.php$ {
+                fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+                include fastcgi_params;
+                fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+            }
+        }
+        EOF
+        fi
         if ! command -v nginx >/dev/null; then
           sudo apt-get update
           sudo apt-get install -y software-properties-common
