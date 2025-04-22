@@ -126,9 +126,12 @@ jobs:
         
         sudo mkdir -p /var/www/html/localpay-api
         sudo tar -xzf /tmp/localpay-api.tar.gz -C /var/www/html/localpay-api --strip-components=1
-        sudo chown -R www-data:www-data /var/www/html/localpay-api
-        sudo chmod -R 755 /var/www/html/localpay-api
-        sudo chmod -R 755 /var/www/html/localpay-api/*
+        sudo chown -R ubuntu:www-data /var/www/html/localpay-api
+        sudo chmod -R 775 /var/www/html/localpay-api
+        sudo chmod -R g+w /var/www/html/localpay-api/storage
+        sudo chmod -R g+w /var/www/html/localbackoffice/bootstrap/cache
+
+
 
         
         sudo cp /var/www/html/localpay-api/deploy/nginx.conf /etc/nginx/sites-available/localpay-api
