@@ -26,7 +26,7 @@ jobs:
               --region me-central-1 \
               --filters "Name=tag:Name,Values=localpay-production-zz" "Name=instance-state-name,Values=running" \
               --output json | jq -r '.Reservations[].Instances[].PublicIpAddress')
-  
+            set -e
             IP_CSV=$(echo "$IP_LIST" | paste -sd "," -)
   
             echo "Resolved EC2 IPs: $IP_CSV"
