@@ -88,7 +88,7 @@ jobs:
       run: |
         IFS=',' read -ra IP_ARRAY <<< "$EC2_PUBLIC_IP"
         for ip in "${IP_ARRAY[@]}"; do
-          echo "📦 Deploying to $ip"
+          echo "📦 Deploying to the $ip"
           scp -C -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
             localpay-api.tar.gz ubuntu@$ip:/tmp/
 
