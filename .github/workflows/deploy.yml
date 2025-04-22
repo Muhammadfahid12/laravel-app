@@ -19,6 +19,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Checking the aws user
+        run:  "Current AWS Access Key: $aws-access-key-id"
+
       
       - name: Get EC2 Public IP by Tag 
         run: |
