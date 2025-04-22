@@ -139,8 +139,8 @@ jobs:
 
           sudo systemctl reload php8.2-fpm
           sudo systemctl restart nginx
-        SSH  # 🔥 Closing "SSH" MUST BE AT START OF LINE (no indentation)
-              done
+          SSH  # 🔥 Closing "SSH" MUST BE AT START OF LINE (no indentation)
+        done
         
 
       # - name: Deploy to Production EC2s
