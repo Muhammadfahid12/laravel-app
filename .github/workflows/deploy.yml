@@ -98,7 +98,8 @@ jobs:
         EC2_PUBLIC_IP: ${{ env.EC2_PUBLIC_IP }}
       run: |
         IFS=',' read -ra IP_ARRAY <<< "$EC2_PUBLIC_IP"
-        for ip in "${IP_ARRAY[@]}"; do  # 🔥 Fix missing quote: "${IP_ARRAY[@]}"
+        for ip in "${IP_ARRAY[@]}"
+        do
           echo "📦 Uploading to $ip"
           scp -C -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
               localpay-api.tar.gz ubuntu@$ip:/tmp/
@@ -139,7 +140,7 @@ jobs:
 
           sudo systemctl reload php8.2-fpm
           sudo systemctl restart nginx
-          SSH  # 🔥 Closing "SSH" MUST BE AT START OF LINE (no indentation)
+         SSH 
         done
         
 
