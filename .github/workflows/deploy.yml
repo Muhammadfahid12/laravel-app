@@ -34,12 +34,12 @@ jobs:
 
       - name: Run composer and build on build server
         run: |
-          mkdir -p /.ssh
+          mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > /.ssh/id_rsa
-          chmod 600 /.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
           ls -la ~/.ssh
           cat ~/.ssh/id_rsa | head -n 5
-          ssh -o StrictHostKeyChecking=no -i /.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} <<'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} <<'EOF'
            set -e
            sudo apt update
            sudo apt install -y software-properties-common
