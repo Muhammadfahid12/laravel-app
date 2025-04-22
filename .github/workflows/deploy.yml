@@ -46,8 +46,8 @@ jobs:
     - name: Push source to build server
       run: |
         mkdir -p ~/.ssh
-        echo "${{secrets.SSH_PRIVATE_KEY}} > ~/.ssh/id_rsa"
-        chmod 600 ~./ssh/id_rsa
+        echo "${{secrets.SSH_PRIVATE_KEY}}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
         scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
             source.tar.gz ubuntu@${{ secrets.BUILD_SERVER_IP }}:/tmp/
 
