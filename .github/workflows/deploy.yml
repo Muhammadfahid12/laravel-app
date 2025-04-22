@@ -59,6 +59,8 @@ jobs:
                 unzip curl composer git
              sudo systemctl enable nginx php8.2-fpm
             fi 
+            command -v composer || { echo "Composer still missing"; exit 1; }
+
              
             # 2)  Ensure Build workspace exists
             sudo mkdir -p /var/www/html/localpay-api
