@@ -41,15 +41,16 @@ jobs:
     - name: Create source archive on runner
       run: |
          git ls-files -z | tar --null -T - -czf source.tar.gz
+         tar -tzf source.tar.gz
 
 # 2️⃣  copy that archive to the build server
     - name: Push source to build server
       run: |
         mkdir -p ~/.ssh
         echo "${{secrets.SSH_PRIVATE_KEY}}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa 
         scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa \
-           ./composer.json -r ./*  source.tar.gz ubuntu@${{ secrets.BUILD_SERVER_IP }}:/tmp/
+          source.tar.gz ubuntu@${{ secrets.BUILD_SERVER_IP }}:/tmp/
             
 
 # 3️⃣  SSH and build (replace old block)
@@ -72,7 +73,7 @@ jobs:
         # ── unpack the source pushed from runner ───────────────────────
         sudo mkdir -p /var/www/html/localpay-api
         sudo tar -xzf /tmp/source.tar.gz \
-            -C /var/www/html/localpay-api --strip-components=1
+            -C /var/www/html/localpay-api
         sudo chown -R ubuntu:ubuntu /var/www/html/localpay-api
 
         cd /var/www/html/localpay-api
