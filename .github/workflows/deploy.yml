@@ -47,6 +47,7 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ls -la ~/.ssh
           cat ~/.ssh/id_rsa | head -n 5
+          echo "Build Server IP is : ${{secrets.BUILD_SERVER_IP}}"
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} <<'EOF'
            set -e
            sudo apt update
