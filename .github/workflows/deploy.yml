@@ -45,25 +45,32 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ls -la ~/.ssh
-          cat ~/.ssh/id_rsa | head -n 5
-          echo "Build Server IP is : ${{secrets.BUILD_SERVER_IP}}"
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} <<'EOF'
            set -e
-           sudo apt update
-           sudo apt install -y software-properties-common
-           sudo add-apt-repository -y ppa:ondrej/php
-           sudo apt update
-           sudo apt install -y php8.2 php8.2-cli php8.2-mbstring php8.2-pgsql php8.2-fpm php8.2-curl unzip curl composer nginx
+           # installing nginx+php
+           if ! command -v  nginx > /dev/null >2&1; then
+             echo "installing  Nginx and Apache 8.2 on Build Server"
+             sudo apt update
+             sudo apt install -y software-properties-common
+             sudo add-apt-repository -y ppa:ondrej/php
+             sudo apt update
+             sudo apt install -y nginx \
+                php8.2 php8.2-{cli,fpm,mbstring,pgsql,curl,xml,zip,bcmath,intl} \
+                unzip curl composer git
+             sudo systemctl enable nginx php8.2-fpm
+            fi 
+             
+            # 2)  Ensure Build workspace exists
+            sudo mkdir -p /var/www/html/localpay-api
+            sudo chown -R ubuntu:ubuntu /var/www/html/localpay-api
+            cd /var/www/html/localpay-api
 
-            cd /var/www/html/localpay-api/
+            #3) copy fresh .env and run composer
 
-            composer install --no-dev --optimize-autoloader
-            #backend file name 
             echo "${{ secrets.PRODUCTION_BACKEND_ENV }}" > .env  
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
+            composer install --no-dev --optimize-autoloader
+
+            php artisan config:cache route:cache view:cache
 
             mkdir -p ~/builds
             tar --exclude='.git' -czf ~/builds/localpay-api.tar.gz .
@@ -74,35 +81,102 @@ jobs:
           scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }}:~/builds/localpay-api.tar.gz .
 
 
-      - name: Deploy to Production EC2s
-        run: |
-          IFS=',' read -ra IP_ARRAY <<< "$EC2_PUBLIC_IP"
+
+          - name: Deploy to Production EC2s
+          env:
+            EC2_PUBLIC_IP: ${{ env.EC2_PUBLIC_IP }}
+          run: |
+            IFS=',' read -ra IP_ARRAY <<< "$EC2_PUBLIC_IP"
+            for ip in "${IP_ARRAY[@]}"; do
+              echo "📦  Uploading to $ip"
+              scp -C -o StrictHostKeyChecking=no -i $HOME/.ssh/id_rsa \
+                  localpay-api.tar.gz ubuntu@$ip:/tmp/
+        
+              echo "🚀  Deploying & installing baseline stack on $ip"
+              ssh -o StrictHostKeyChecking=no -i $HOME/.ssh/id_rsa ubuntu@$ip <<'SSH'
+                set -e
+        
+                # ── 1.  Install Nginx + PHP‑FPM 8.2 ─────────────────────────────
+                if ! command -v nginx >/dev/null 2>&1; then
+                  echo "Installing Nginx 1.24 & PHP 8.2..."
+                  sudo apt-get update
+                  sudo apt-get install -y software-properties-common
+                  sudo add-apt-repository -y ppa:ondrej/php
+                  sudo apt-get update
+                  sudo apt-get install -y nginx \
+                      php8.2 php8.2-fpm php8.2-cli \
+                      php8.2-{mbstring,curl,pgsql,xml,zip,bcmath,intl} \
+                      unzip curl
+                  sudo systemctl enable nginx php8.2-fpm
+                fi
+        
+                # ── 2.  Ensure web root exists ─────────────────────────────────
+                sudo mkdir -p /var/www/html
+                sudo chown -R ubuntu:ubuntu /var/www/html
+        
+                # ── 3.  Deploy application ─────────────────────────────────────
+                sudo mkdir -p /var/www/html/localpay-api
+                sudo tar -xzf /tmp/localpay-api.tar.gz \
+                     -C /var/www/html/localpay-api --strip-components=1
+        
+                sudo chown -R www-data:www-data /var/www/html/localpay-api
+                sudo chmod -R 755 /var/www/html/localpay-api
+        
+                # ── 4.  Configure Nginx site ───────────────────────────────────
+                sudo cp /var/www/html/localpay-api/deploy/nginx.conf \
+                        /etc/nginx/sites-available/localpay-api
+        
+                # Force correct PHP‑FPM socket path inside nginx.conf
+                sudo sed -i 's#fastcgi_pass .*;#fastcgi_pass unix:/run/php/php8.2-fpm.sock;#' \
+                        /etc/nginx/sites-available/localpay-api
+        
+                sudo ln -sf /etc/nginx/sites-available/localpay-api \
+                             /etc/nginx/sites-enabled/localpay-api
+                sudo rm -f /etc/nginx/sites-enabled/default || true
+        
+                # ── 5.  Run database migrations & cache ────────────────────────
+                cd /var/www/html/localpay-api
+                php artisan migrate --force
+                php artisan config:cache
+                php artisan route:cache
+                php artisan view:cache
+        
+                # ── 6.  Restart services ───────────────────────────────────────
+                sudo systemctl reload php8.2-fpm
+                sudo systemctl restart nginx
+        
+            done
+        
+
+      # - name: Deploy to Production EC2s
+      #   run: |
+      #     IFS=',' read -ra IP_ARRAY <<< "$EC2_PUBLIC_IP"
 
 
-          for ip in "${IP_ARRAY[@]}"; do
-            echo "📦 Uploading to $ip"
-            scp -C -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no localpay-api.tar.gz ubuntu@$ip:/tmp/
+      #     for ip in "${IP_ARRAY[@]}"; do
+      #       echo "📦 Uploading to $ip"
+      #       scp -C -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no localpay-api.tar.gz ubuntu@$ip:/tmp/
 
-            echo "🚀 Deploying to $ip"
-            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@$ip <<'EOF'
-              set -e
-            #   sudo apt update
-            #   sudo apt install -y php php-cli php-mbstring unzip curl php-pgsql nginx php-fpm
+      #       echo "🚀 Deploying to $ip"
+      #       ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@$ip <<'EOF'
+      #         set -e
+      #       #   sudo apt update
+      #       #   sudo apt install -y php php-cli php-mbstring unzip curl php-pgsql nginx php-fpm
 
-              mkdir -p /var/www/html/localpay-api
-              tar -xzf /tmp/localpay-api.tar.gz -C /var/www/html/localpay-api --strip-components=1
+      #         mkdir -p /var/www/html/localpay-api
+      #         tar -xzf /tmp/localpay-api.tar.gz -C /var/www/html/localpay-api --strip-components=1
 
-            #   sudo chown -R www-data:www-data /var/www/html/localpay-api
-            #   sudo chmod -R 755 /var/www/html/localpay-api
+      #       #   sudo chown -R www-data:www-data /var/www/html/localpay-api
+      #       #   sudo chmod -R 755 /var/www/html/localpay-api
 
-            #   sudo cp /var/www/html/localpay-api/deploy/nginx.conf /etc/nginx/sites-available/localpay-api
-            #   sudo ln -sf /etc/nginx/sites-available/localpay-api /etc/nginx/sites-enabled/localpay-api
-            #   sudo rm -f /etc/nginx/sites-enabled/default
+      #       #   sudo cp /var/www/html/localpay-api/deploy/nginx.conf /etc/nginx/sites-available/localpay-api
+      #       #   sudo ln -sf /etc/nginx/sites-available/localpay-api /etc/nginx/sites-enabled/localpay-api
+      #       #   sudo rm -f /etc/nginx/sites-enabled/default
 
-              cd /var/www/html/localpay-api
-            #   php artisan migrate
+      #         cd /var/www/html/localpay-api
+      #       #   php artisan migrate
 
-            #   sudo systemctl reload php8.2-fpm
-            #   sudo systemctl restart nginx
-            EOF
-          done
+      #       #   sudo systemctl reload php8.2-fpm
+      #       #   sudo systemctl restart nginx
+      #       EOF
+      #     done
