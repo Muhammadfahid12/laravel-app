@@ -139,7 +139,7 @@ jobs:
 
             sudo systemctl reload php8.2-fpm
             sudo systemctl restart nginx
-            SSH  
+          SSH  
         done
 
         
