@@ -84,6 +84,8 @@ jobs:
 
 
       - name: Deploy to Production EC2s
+        env:
+          EC2_PUBLIC_IP: ${{ env.EC2_PUBLIC_IP }}
         if: github.ref == 'refs/heads/main'
         run: |
               mkdir -p ~/.ssh
@@ -120,5 +122,4 @@ jobs:
                   echo "✅ Deployment successful on $ip"
                 '"
               done
-            env:
-              EC2_PUBLIC_IP: ${{ env.EC2_PUBLIC_IP }}
+            
