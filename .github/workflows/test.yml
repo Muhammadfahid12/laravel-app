@@ -55,6 +55,9 @@ jobs:
 
             echo "🧱 Installing dependencies "
             composer install --no-dev --prefer-dist --no-progress --no-suggest
+            sudo chown -R www-data:www-data storage bootstrap/cache
+            sudo chmod -R 775 storage bootstrap/cache
+
             php artisan migrate --force
             php artisan config:cache
 
