@@ -1,9 +1,11 @@
-name: LocalPay Client Deployment Job
+name: Deploy Localpay Api Prod
 
 on:
   push:
     branches:
       - "main"
+      - "Staging"
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -18,7 +20,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: me-central-1
 
       - name: Get EC2 Public IP by Tag (for main only)
         if: github.ref == 'refs/heads/main'
@@ -35,6 +37,7 @@ jobs:
           echo "Resolved EC2 IPs: $IP_CSV"
           echo "EC2_PUBLIC_IP=$IP_CSV" >> $GITHUB_ENV
 
+
       - name: Trigger Build on Build EC2 Server
         if: github.ref == 'refs/heads/main'
         run: |
@@ -45,59 +48,30 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} "bash -s" <<'EOF'
             set -e
             echo "📥 Pulling latest code..."
-            cd /var/www/html/localpay-api/backend
+            cd /var/www/html/localpay-api
             git pull origin main
 
-            echo "🧱 Installing dependencies & building..."
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            nvm install 22.14.0
-            nvm use 22.14.0
-            yarn install --frozen-lockfile
+            echo "🧱 Installing dependencies "
+            composer install --no-dev --prefer-dist --no-progress --no-suggest
+            php artisan migrate --force
+            php artisan config:cache
 
             echo "${{ secrets.PRODUCTION_BACKEND_ENV }}" > .env
-            yarn build
 
-            echo "📦 Creating deployable artifact..."
+            echo "🔐 Ensure tar is installed"
+            sudo apt-get update -y
+            sudo apt-get install -y tar
+
+            echo "📦 Creating tar.gz deployable artifact..."
             mkdir -p ~/localpay-api
-            zip -r ~/localpay-api/localpay-api.zip . -x ".git/*" "tests/*"
+            tar --exclude='.git' --exclude='tests' -czf ~/localpay-api/localpay-api.tar.gz .
+            echo "📦 Creating tar.gz deployable artifact..."
           EOF
 
       - name: Copy Build Artifact from Build EC2 to Local
         if: github.ref == 'refs/heads/main'
         run: |
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }}:~/localpay-api/localpay-api.zip .
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v2
-
-      - name: Setup Node using NVM, Install Yarn, and Build
-        if: github.ref == 'refs/heads/staging'
-        run: |
-          echo "Installing NVM..."
-          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
-
-          echo "Installing Node.js v22.14.0..."
-          nvm install 22.14.0
-          nvm use 22.14.0
-
-          echo "Installing Yarn..."
-          npm install -g yarn
-
-          echo "Installing dependencies..."
-          yarn install
-
-          echo "Writing .env file from secret..."
-          echo "${{ github.ref == 'refs/heads/main' && secrets.PRODUCTION_BACKEND_ENV}}" > .env
-
-          echo "Building the project..."
-          yarn build
-        shell: bash
-
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }}:~/localpay-api/localpay-api.tar.gz .
 
       - name: Deploy to Production EC2s
         if: github.ref == 'refs/heads/main'
@@ -108,25 +82,17 @@ jobs:
 
           IFS=',' read -ra IP_ARRAY <<< "$EC2_PUBLIC_IP"
 
-          echo "📦 Zipping deployable files..."
-          zip -r localpay-api.zip . -x ".git/*" > /dev/null
-
           for ip in "${IP_ARRAY[@]}"; do
             echo "📦 Copying code to $ip"
-            scp -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no localpay-api.zip ubuntu@$ip:/tmp/
+            scp -C -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no localpay-api.tar.gz ubuntu@$ip:/tmp/
 
             echo "🚀 Executing remote commands on $ip"
             echo "🧩 Unzipping and restarting PM2 on $ip"
             ssh -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntu@$ip "bash -c '
               source ~/.bashrc || true
-              export NVM_DIR=\$HOME/.nvm
-              [ -s \$NVM_DIR/nvm.sh ] && \. \$NVM_DIR/nvm.sh
-              mkdir -p /var/www/html/localpay-api/backend
-              unzip -oq /tmp/localpay-api.zip -d /var/www/html/localpay-api/backend
-              cd /var/www/html/localpay-api/backend
-              pm2 restart localpay-api
+              mkdir -p /var/www/html/localpay-api
+              tar -xzf /tmp/localpay-api.tar.gz -C /var/www/html/localpay-api
             '"
-
             echo "✅ Deployment to $ip completed"
           done
         env:
