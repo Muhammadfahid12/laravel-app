@@ -48,6 +48,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} "bash -s" <<'EOF'
             set -e
             echo "📥 Pulling latest code..."
+            sudo rm -rf /var/www/html/localpay-api/*
             git clone https://github.com/Muhammadfahid12/localpay-api.git /var/www/html/localpay-api
             cd /var/www/html/localpay-api
             echo "${{ secrets.PRODUCTION_BACKEND_ENV }}" > .env
