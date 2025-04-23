@@ -38,47 +38,80 @@ jobs:
           echo "EC2_PUBLIC_IP=$IP_CSV" >> $GITHUB_ENV
 
 
+    #   - name: Trigger Build on Build EC2 Server
+    #     if: github.ref == 'refs/heads/main'
+    #     run: |
+    #       mkdir -p ~/.ssh
+    #       echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+    #       chmod 600 ~/.ssh/id_rsa
+
+    #       ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} "bash -s" <<'EOF'
+    #         set -e
+    #         echo "📥 Pulling latest code..."
+    #         cd /var/www/html/localpay-api
+
+    #         # git pull origin main
+    #         git -c core.sshCommand='ssh -i /home/ubuntu/.ssh/id_rsa' pull
+            
+    #         echo "🔧 Setting proper permissions..."
+    #         sudo chown -R ubuntu:ubuntu /var/www/html/localpay-api
+    #         echo "${{ secrets.PRODUCTION_BACKEND_ENV }}" > .env
+
+    #         sudo find /var/www/html/localpay-api -type d -exec chmod 755 {} \;
+    #         sudo find /var/www/html/localpay-api -type f -exec chmod 644 {} \;
+    #         sudo chmod -R u+rwX,go-w /var/www/html/localpay-api/storage
+    #         sudo chmod -R u+rwX,go-w /var/www/html/localpay-api/bootstrap/cache
+
+
+
+    #         echo "🧱 Installing dependencies "
+    #         composer install --no-dev --prefer-dist --no-progress --no-suggest
+    #         php artisan migrate --force
+    #         php artisan config:cache
+
+
+    #         echo "🔐 Ensure tar is installed"
+    #         sudo apt-get update -y
+    #         sudo apt-get install -y tar
+
+    #         echo "📦 Creating tar.gz deployable artifact..."
+    #         mkdir -p ~/localpay-api
+    #         tar --exclude='.git' --exclude='tests' -czf ~/localpay-api/localpay-api.tar.gz .
+    #         echo "📦 Creating tar.gz deployable artifact..."
+    #       EOF
+            
       - name: Trigger Build on Build EC2 Server
         if: github.ref == 'refs/heads/main'
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} "bash -s" <<'EOF'
+            mkdir -p ~/.ssh
+            echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            
+            ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} "bash -s" <<'EOF'
             set -e
+            echo "🔧 Preparing workspace..."
+            sudo mkdir -p /var/www/html/localpay-api
+            sudo chown -R ubuntu:ubuntu /var/www/html/localpay-api
+            sudo chmod -R 755 /var/www/html/localpay-api
+                
             echo "📥 Pulling latest code..."
             cd /var/www/html/localpay-api
-
-            # git pull origin main
-            git -c core.sshCommand='ssh -i /home/ubuntu/.ssh/id_rsa' pull
-            
-            echo "🔧 Setting proper permissions..."
-            sudo chown -R ubuntu:ubuntu /var/www/html/localpay-api
+            git -c core.sshCommand='ssh -i /home/ubuntu/.ssh/id_rsa' pull origin main
+                
+            echo "🛠️  Setting up environment..."
+            sudo touch .env
+            sudo chown ubuntu:ubuntu .env
             echo "${{ secrets.PRODUCTION_BACKEND_ENV }}" > .env
-
-            sudo find /var/www/html/localpay-api -type d -exec chmod 755 {} \;
-            sudo find /var/www/html/localpay-api -type f -exec chmod 644 {} \;
-            sudo chmod -R u+rwX,go-w /var/www/html/localpay-api/storage
-            sudo chmod -R u+rwX,go-w /var/www/html/localpay-api/bootstrap/cache
-
-
-
-            echo "🧱 Installing dependencies "
-            composer install --no-dev --prefer-dist --no-progress --no-suggest
-            php artisan migrate --force
-            php artisan config:cache
-
-
-            echo "🔐 Ensure tar is installed"
-            sudo apt-get update -y
-            sudo apt-get install -y tar
-
-            echo "📦 Creating tar.gz deployable artifact..."
+                
+            echo "🔐 Setting permissions..."
+            sudo chown -R www-data:www-data /var/www/html/localpay-api/storage
+            sudo chmod -R 775 /var/www/html/localpay-api/storage
+            sudo chmod -R 775 /var/www/html/localpay-api/bootstrap/cache
+                
+            echo "📦 Building artifact..."
             mkdir -p ~/localpay-api
             tar --exclude='.git' --exclude='tests' -czf ~/localpay-api/localpay-api.tar.gz .
-            echo "📦 Creating tar.gz deployable artifact..."
-          EOF
+            EOF
 
       - name: Copy Build Artifact from Build EC2 to Local
         if: github.ref == 'refs/heads/main'
