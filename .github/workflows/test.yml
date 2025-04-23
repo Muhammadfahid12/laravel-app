@@ -49,12 +49,13 @@ jobs:
             set -e
             echo "📥 Pulling latest code..."
             cd /var/www/html/localpay-api
-            echo "${{ secrets.PRODUCTION_BACKEND_ENV }}" > .env
 
             git pull origin main
             
             echo "🔧 Setting proper permissions..."
             sudo chown -R ubuntu:ubuntu /var/www/html/localpay-api
+            echo "${{ secrets.PRODUCTION_BACKEND_ENV }}" > .env
+
             sudo find /var/www/html/localpay-api -type d -exec chmod 755 {} \;
             sudo find /var/www/html/localpay-api -type f -exec chmod 644 {} \;
             sudo chmod -R u+rwX,go-w /var/www/html/localpay-api/storage
