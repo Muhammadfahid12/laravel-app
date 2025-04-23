@@ -86,34 +86,39 @@ jobs:
       - name: Deploy to Production EC2s
         if: github.ref == 'refs/heads/main'
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-
-          IFS=',' read -ra IP_ARRAY <<< "$EC2_PUBLIC_IP"
-
-          for ip in "${IP_ARRAY[@]}"; do
-            echo "📦 Copying code to $ip"
-            ssh -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntu@$ip "sudo rm -f /tmp/localpay-api.tar.gz"
-           
-
-
-
-            echo "🚀 Executing remote commands on $ip"
-            echo "🧩 Unzipping and restarting PM2 on $ip"
-            ssh -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntu@$ip "bash -c '
-              source ~/.bashrc || true
-              sudo rm -rf /var/www/html/localpay-api/{*,.*} 2>/dev/null || true
-
-              mkdir -p /var/www/html/localpay-api
-              sudo tar -xzf /tmp/localpay-api.tar.gz -C /var/www/html/localpay-api \
-                --overwrite \
-                --recursive-unlink \
-                --no-same-owner
-              sudo chown -R www-data:www-data /var/www/html/localpay-api/storage /var/www/html/localpay-api/bootstrap/cache
-              sudo chmod -R 775 /var/www/html/localpay-api/storage /var/www/html/localpay-api/bootstrap/cache
-            '"
-            echo "✅ Deployment to $ip completed"
-          done
-        env:
-          EC2_PUBLIC_IP: ${{ env.EC2_PUBLIC_IP }}
+              mkdir -p ~/.ssh
+              echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+              chmod 600 ~/.ssh/id_rsa
+          
+              IFS=',' read -ra IP_ARRAY <<< "$EC2_PUBLIC_IP"
+          
+              for ip in "${IP_ARRAY[@]}"; do
+                echo "📦 Copying code to $ip"
+                scp -v -i ~/.ssh/id_rsa -o ConnectTimeout=20 -o StrictHostKeyChecking=no localpay-api.tar.gz ubuntu@$ip:/tmp/
+          
+                # Verify file transfer
+                ssh -i ~/.ssh/id_rsa ubuntu@$ip "ls -lh /tmp/localpay-api.tar.gz || { echo '❌ TAR file missing!'; exit 1; }"
+          
+                echo "🚀 Executing remote commands on $ip"
+                ssh -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntu@$ip "bash -c '
+                  set -e
+                  echo "🧹 Cleaning deployment area..."
+                  sudo rm -rf /var/www/html/localpay-api/*
+          
+                  echo "📦 Extracting artifact..."
+                  sudo tar -xzf /tmp/localpay-api.tar.gz -C /var/www/html/localpay-api --warning=no-ignore-newer
+          
+                  echo "📂 Creating directories..."
+                  sudo mkdir -p /var/www/html/localpay-api/storage
+                  sudo mkdir -p /var/www/html/localpay-api/bootstrap/cache
+          
+                  echo "🔐 Setting permissions..."
+                  sudo chown -R www-data:www-data /var/www/html/localpay-api
+                  sudo find /var/www/html/localpay-api -type d -exec chmod 755 {} \;
+                  sudo find /var/www/html/localpay-api -type f -exec chmod 644 {} \;
+                  
+                  echo "✅ Deployment successful on $ip"
+                '"
+              done
+            env:
+              EC2_PUBLIC_IP: ${{ env.EC2_PUBLIC_IP }}
