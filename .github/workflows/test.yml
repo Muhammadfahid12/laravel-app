@@ -82,6 +82,13 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: |
           scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }}:~/localpay-api/localpay-api.tar.gz .
+      
+      - name: Upload Artifact to S3 (Production)
+        if: github.ref == 'refs/heads/main'
+        run: |
+            aws s3 cp localpay-api.tar.gz s3://s3-bucket-for-storing-builds/latest/localpay-api.tar.gz    
+
+
 
       - name: Deploy to Production EC2s
         if: github.ref == 'refs/heads/main'
