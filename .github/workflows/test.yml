@@ -95,14 +95,21 @@ jobs:
           for ip in "${IP_ARRAY[@]}"; do
             echo "📦 Copying code to $ip"
             ssh -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntu@$ip "sudo rm -f /tmp/localpay-api.tar.gz"
-            scp -C -i ~/.ssh/id_rsa -o ConnectTimeout=20 -o StrictHostKeyChecking=no localpay-api.tar.gz ubuntu@$ip:/tmp/
+           
+
+
 
             echo "🚀 Executing remote commands on $ip"
             echo "🧩 Unzipping and restarting PM2 on $ip"
             ssh -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntu@$ip "bash -c '
               source ~/.bashrc || true
+              sudo rm -rf /var/www/html/localpay-api/{*,.*} 2>/dev/null || true
+
               mkdir -p /var/www/html/localpay-api
-              tar -xzf /tmp/localpay-api.tar.gz -C /var/www/html/localpay-api
+              sudo tar -xzf /tmp/localpay-api.tar.gz -C /var/www/html/localpay-api \
+                --overwrite \
+                --recursive-unlink \
+                --no-same-owner
               sudo chown -R www-data:www-data /var/www/html/localpay-api/storage /var/www/html/localpay-api/bootstrap/cache
               sudo chmod -R 775 /var/www/html/localpay-api/storage /var/www/html/localpay-api/bootstrap/cache
             '"
