@@ -101,7 +101,8 @@ jobs:
 
           for ip in "${IP_ARRAY[@]}"; do
             echo "📦 Copying code to $ip"
-            scp -C -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no localpay-api.tar.gz ubuntu@$ip:/tmp/
+            ssh -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntu@$ip "sudo rm -f /tmp/localpay-api.tar.gz"
+            scp -C -i ~/.ssh/id_rsa -o ConnectTimeout=20 -o StrictHostKeyChecking=no localpay-api.tar.gz ubuntu@$ip:/tmp/
 
             echo "🚀 Executing remote commands on $ip"
             echo "🧩 Unzipping and restarting PM2 on $ip"
