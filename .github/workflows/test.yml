@@ -27,7 +27,7 @@ jobs:
         id: ec2-ip
         run: |
           IP_LIST=$(aws ec2 describe-instances \
-            --region me-central-1 \
+            --region us-east-1 \
             --filters "Name=tag:Name,Values=localpay-production-zz" "Name=instance-state-name,Values=running" \
             --output json | jq -r '.Reservations[].Instances[].PublicIpAddress')
 
