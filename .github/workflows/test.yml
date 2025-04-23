@@ -1,0 +1,134 @@
+name: LocalPay Client Deployment Job
+
+on:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up AWS CLI (for main only)
+        if: github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Get EC2 Public IP by Tag (for main only)
+        if: github.ref == 'refs/heads/main'
+        id: ec2-ip
+        run: |
+          IP_LIST=$(aws ec2 describe-instances \
+            --region me-central-1 \
+            --filters "Name=tag:Name,Values=localpay-production-zz" "Name=instance-state-name,Values=running" \
+            --output json | jq -r '.Reservations[].Instances[].PublicIpAddress')
+
+          # Join IPs by comma if there are multiple
+          IP_CSV=$(echo "$IP_LIST" | paste -sd "," -)
+
+          echo "Resolved EC2 IPs: $IP_CSV"
+          echo "EC2_PUBLIC_IP=$IP_CSV" >> $GITHUB_ENV
+
+      - name: Trigger Build on Build EC2 Server
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} "bash -s" <<'EOF'
+            set -e
+            echo "📥 Pulling latest code..."
+            cd /var/www/html/localpay-client/frontend
+            git pull origin main
+
+            echo "🧱 Installing dependencies & building..."
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            nvm install 22.14.0
+            nvm use 22.14.0
+            yarn install --frozen-lockfile
+
+            echo "${{ secrets.PRODUCTION_BACKEND_ENV }}" > .env
+            yarn build
+
+            echo "📦 Creating deployable artifact..."
+            mkdir -p ~/localpay-client
+            zip -r ~/localpay-client/localpay-frontend.zip . -x ".git/*" "tests/*"
+          EOF
+
+      - name: Copy Build Artifact from Build EC2 to Local
+        if: github.ref == 'refs/heads/main'
+        run: |
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }}:~/localpay-client/localpay-frontend.zip .
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+
+      - name: Setup Node using NVM, Install Yarn, and Build
+        if: github.ref == 'refs/heads/staging'
+        run: |
+          echo "Installing NVM..."
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+
+          echo "Installing Node.js v22.14.0..."
+          nvm install 22.14.0
+          nvm use 22.14.0
+
+          echo "Installing Yarn..."
+          npm install -g yarn
+
+          echo "Installing dependencies..."
+          yarn install
+
+          echo "Writing .env file from secret..."
+          echo "${{ github.ref == 'refs/heads/main' && secrets.PRODUCTION_BACKEND_ENV}}" > .env
+
+          echo "Building the project..."
+          yarn build
+        shell: bash
+
+
+      - name: Deploy to Production EC2s
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          IFS=',' read -ra IP_ARRAY <<< "$EC2_PUBLIC_IP"
+
+          echo "📦 Zipping deployable files..."
+          zip -r localpay-frontend.zip . -x ".git/*" > /dev/null
+
+          for ip in "${IP_ARRAY[@]}"; do
+            echo "📦 Copying code to $ip"
+            scp -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no localpay-frontend.zip ubuntu@$ip:/tmp/
+
+            echo "🚀 Executing remote commands on $ip"
+            echo "🧩 Unzipping and restarting PM2 on $ip"
+            ssh -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no ubuntu@$ip "bash -c '
+              source ~/.bashrc || true
+              export NVM_DIR=\$HOME/.nvm
+              [ -s \$NVM_DIR/nvm.sh ] && \. \$NVM_DIR/nvm.sh
+              mkdir -p /var/www/html/localpay-client/frontend
+              unzip -oq /tmp/localpay-frontend.zip -d /var/www/html/localpay-client/frontend
+              cd /var/www/html/localpay-client/frontend
+              pm2 restart localpay-client
+            '"
+
+            echo "✅ Deployment to $ip completed"
+          done
+        env:
+          EC2_PUBLIC_IP: ${{ env.EC2_PUBLIC_IP }}
