@@ -44,6 +44,8 @@ jobs:
             mkdir -p ~/.ssh
             echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
             chmod 600 ~/.ssh/id_rsa
+            ssh-keyscan -H ${{ secrets.BUILD_SERVER_IP }} >> ~/.ssh/known_hosts
+
         
             ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} "bash -s" <<'EOF'
             set -e
