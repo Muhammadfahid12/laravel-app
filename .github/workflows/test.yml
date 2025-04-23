@@ -49,6 +49,8 @@ jobs:
             set -e
             echo "📥 Pulling latest code..."
             cd /var/www/html/localpay-api
+            echo "${{ secrets.PRODUCTION_BACKEND_ENV }}" > .env
+
             git pull origin main
 
             echo "🧱 Installing dependencies "
@@ -56,7 +58,6 @@ jobs:
             php artisan migrate --force
             php artisan config:cache
 
-            echo "${{ secrets.PRODUCTION_BACKEND_ENV }}" > .env
 
             echo "🔐 Ensure tar is installed"
             sudo apt-get update -y
