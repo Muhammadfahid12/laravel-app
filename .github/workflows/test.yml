@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - "main"
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -46,7 +45,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }} "bash -s" <<'EOF'
             set -e
             echo "📥 Pulling latest code..."
-            cd /var/www/html/localpay-client/frontend
+            cd /var/www/html/localpay-api/backend
             git pull origin main
 
             echo "🧱 Installing dependencies & building..."
@@ -60,14 +59,14 @@ jobs:
             yarn build
 
             echo "📦 Creating deployable artifact..."
-            mkdir -p ~/localpay-client
-            zip -r ~/localpay-client/localpay-frontend.zip . -x ".git/*" "tests/*"
+            mkdir -p ~/localpay-api
+            zip -r ~/localpay-api/localpay-api.zip . -x ".git/*" "tests/*"
           EOF
 
       - name: Copy Build Artifact from Build EC2 to Local
         if: github.ref == 'refs/heads/main'
         run: |
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }}:~/localpay-client/localpay-frontend.zip .
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@${{ secrets.BUILD_SERVER_IP }}:~/localpay-api/localpay-api.zip .
 
       - name: Set up Node.js
         uses: actions/setup-node@v2
@@ -110,11 +109,11 @@ jobs:
           IFS=',' read -ra IP_ARRAY <<< "$EC2_PUBLIC_IP"
 
           echo "📦 Zipping deployable files..."
-          zip -r localpay-frontend.zip . -x ".git/*" > /dev/null
+          zip -r localpay-api.zip . -x ".git/*" > /dev/null
 
           for ip in "${IP_ARRAY[@]}"; do
             echo "📦 Copying code to $ip"
-            scp -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no localpay-frontend.zip ubuntu@$ip:/tmp/
+            scp -i ~/.ssh/id_rsa -o ConnectTimeout=10 -o StrictHostKeyChecking=no localpay-api.zip ubuntu@$ip:/tmp/
 
             echo "🚀 Executing remote commands on $ip"
             echo "🧩 Unzipping and restarting PM2 on $ip"
@@ -122,10 +121,10 @@ jobs:
               source ~/.bashrc || true
               export NVM_DIR=\$HOME/.nvm
               [ -s \$NVM_DIR/nvm.sh ] && \. \$NVM_DIR/nvm.sh
-              mkdir -p /var/www/html/localpay-client/frontend
-              unzip -oq /tmp/localpay-frontend.zip -d /var/www/html/localpay-client/frontend
-              cd /var/www/html/localpay-client/frontend
-              pm2 restart localpay-client
+              mkdir -p /var/www/html/localpay-api/backend
+              unzip -oq /tmp/localpay-api.zip -d /var/www/html/localpay-api/backend
+              cd /var/www/html/localpay-api/backend
+              pm2 restart localpay-api
             '"
 
             echo "✅ Deployment to $ip completed"
